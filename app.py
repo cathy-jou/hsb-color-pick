@@ -58,11 +58,11 @@ def pixelate_and_extract_hsv(img: Image.Image, block_size: int = 16):
 
 # --- Streamlit 界面設計 ---
 st.set_page_config(
-    page_title="圖片顏色統一分析工具 (HSB)",
+    page_title="圖片顏色分析平台",
     layout="wide"
 )
 
-st.title("多張圖片主要顏色 (HSB) 統一分析工具")
+st.title("圖片顏色(HSB)分析")
 st.markdown("上傳多張圖片，程式會先進行馬賽克化，然後**統一統計所有圖片像素**的最主要 HSB 顏色資訊。")
 
 # 側邊欄控制項
