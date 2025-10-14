@@ -122,7 +122,7 @@ if uploaded_files:
                 # 顯示單張圖片的馬賽克結果
                 col_index = file_index % len(cols)
                 with cols[col_index]:
-                    st.image(pixelated_img, caption=f"檔案 #{file_index + 1}", use_column_width=True)
+                    st.image(pixelated_img, caption=f"檔案 #{file_index + 1}", use_container_width=True)
 
             except Exception as e:
                 st.warning(f"跳過檔案 {uploaded_file.name} (錯誤: {e})")
