@@ -62,7 +62,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎨 多張圖片主要顏色 (HSB) 統一分析工具")
+st.title("多張圖片主要顏色 (HSB) 統一分析工具")
 st.markdown("上傳多張圖片，程式會先進行馬賽克化，然後**統一統計所有圖片像素**的最主要 HSB 顏色資訊。")
 
 # 側邊欄控制項
@@ -132,7 +132,7 @@ if uploaded_files:
     else:
         # 2. 統一統計所有收集到的像素
         st.markdown("---")
-        st.subheader(f"📊 總體顏色分析結果 ({len(uploaded_files)} 張圖片統一統計)")
+        st.subheader(f"總體顏色分析結果 ({len(uploaded_files)} 張圖片統一統計)")
         
         color_counts = Counter(all_hsv_pixels)
         total_pixels = len(all_hsv_pixels)
