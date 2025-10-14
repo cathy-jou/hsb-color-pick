@@ -111,4 +111,87 @@ if uploaded_files:
 
         for file_index, uploaded_file in enumerate(uploaded_files):
             try:
-                image = Image.open(uploaded_file
+                image = Image.open(uploaded_file)
+                
+                # 執行馬賽克化並提取像素
+                hsv_pixels, pixelated_img = pixelate_and_extract_hsv(image, block_size)
+                
+                all_hsv_pixels.extend(hsv_pixels)
+                pixelated_images.append(pixelated_img)
+
+                # 顯示單張圖片的馬賽克結果
+                col_index = file_index % len(cols)
+                with cols[col_index]:
+                    st.image(pixelated_img, caption=f"檔案 #{file_index + 1}", use_column_width=True)
+
+            except Exception as e:
+                st.warning(f"跳過檔案 {uploaded_file.name} (錯誤: {e})")
+
+    if not all_hsv_pixels:
+        st.error("所有圖片處理失敗或未成功提取任何像素數據。")
+    else:
+        # 2. 統一統計所有收集到的像素
+        st.markdown("---")
+        st.subheader(f"📊 總體顏色分析結果 ({len(uploaded_files)} 張圖片統一統計)")
+        
+        color_counts = Counter(all_hsv_pixels)
+        total_pixels = len(all_hsv_pixels)
+
+        results = []
+        for (h_int, s_int, b_int), count in color_counts.most_common(top_colors):
+            # 轉換為標準 HSB 範圍 (H:0-360, S:0-100%, B:0-100%)
+            h_degree = round(h_int / 255.0 * 360)
+            s_percent = round(s_int / 255.0 * 100)
+            b_percent = round(b_int / 255.0 * 100)
+            
+            # 轉換為 HTML/CSS 顏色代碼 (用於視覺化)
+            r, g, b = colorsys.hsv_to_rgb(h_int/255.0, s_int/255.0, b_int/255.0)
+            hex_color = f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
+            
+            results.append({
+                "排名": len(results) + 1,
+                "色相 (H)": h_degree,
+                "飽和度 (S)": s_percent,
+                "亮度 (B)": b_percent,
+                "像素數量": count,
+                "比例 (%)": round(count / total_pixels * 100, 2),
+                "顏色代碼 (RGB)": hex_color
+            })
+            
+        color_df = pd.DataFrame(results)
+
+        # 3. 視覺化輸出
+        st.markdown("#### 顏色視覺化")
+        color_html = ""
+        for index, row in color_df.iterrows():
+            hex_color = row['顏色代碼 (RGB)']
+            h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
+            
+            color_html += f"""
+            <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px;">
+                <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
+                <p style="margin-top: 5px; font-size: 14px;">No. {row['排名']}</p>
+                <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
+                <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
+            </div>
+            """
+
+        st.markdown(color_html, unsafe_allow_html=True)
+
+        # 4. 顯示詳細數據表格
+        st.markdown("---")
+        st.markdown("#### 詳細數據表格")
+
+        display_cols = ['排名', '色相 (H)', '飽和度 (S)', '亮度 (B)', '像素數量', '比例 (%)', '顏色代碼 (RGB)']
+
+        st.dataframe(
+            color_df[display_cols],
+            hide_index=True,
+            use_container_width=True
+        )
+
+        st.markdown("---")
+        st.info("分析完成。備註：H (色相) 範圍 0-360；S (飽和度) 和 B (亮度) 範圍 0-100%。")
+
+else:
+    st.info("請在左側側邊欄上傳圖片以開始分析。")
