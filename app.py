@@ -5,7 +5,7 @@ import colorsys
 import pandas as pd
 from collections import Counter
 
-# --- 核心分析函數 (從您原有的程式碼修改而來) ---
+# --- 核心分析函數 (保持不變) ---
 def analyze_color(img: Image.Image, block_size: int = 16, top_colors: int = 5):
     """
     將圖片馬賽克化並分析其主要 HSB 顏色。
@@ -97,10 +97,11 @@ st.markdown("上傳圖片後，程式會先進行馬賽克化（降低解析度�
 # 側邊欄控制項
 st.sidebar.header("設定參數")
 
-# 1. 圖片上傳
-uploaded_file = st.sidebar.file_uploader(
-    "上傳圖片 (.jpg, .png)", 
-    type=["jpg", "jpeg", "png"]
+# 1. ***修改點：允許上傳多個檔案***
+uploaded_files = st.sidebar.file_uploader(
+    "上傳圖片 (.jpg, .png) - 可選取多張", 
+    type=["jpg", "jpeg", "png"],
+    accept_multiple_files=True  # 關鍵修改
 )
 
 # 2. 核心參數
@@ -121,75 +122,83 @@ top_colors = st.sidebar.slider(
     step=1
 )
 
-if uploaded_file is not None:
-    try:
-        # 讀取圖片
-        image = Image.open(uploaded_file)
+# 3. ***修改點：迴圈處理所有上傳的檔案***
+if uploaded_files: # 檢查列表是否為空
+    
+    st.subheader("分析結果")
+    
+    for file_index, uploaded_file in enumerate(uploaded_files):
         
-        st.subheader("分析結果")
+        st.markdown(f"## 📁 檔案 #{file_index + 1}: {uploaded_file.name}")
         
-        # 左右分欄顯示
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.image(image, caption="原始圖片", use_column_width=True)
-            st.write(f"原始解析度: {image.size[0]}x{image.size[1]}")
-
-        # 執行分析
-        with st.spinner("正在進行顏色分析與馬賽克化..."):
-            color_df, pixelated_image = analyze_color(image, block_size, top_colors)
-
-        with col2:
-            st.image(pixelated_image, caption=f"馬賽克化結果 (Block Size={block_size})", use_column_width=True)
-            st.write(f"分析解析度: {pixelated_image.size[0]}x{pixelated_image.size[1]}")
-
-
-        # 顯示顏色結果
-        st.markdown("---")
-        st.subheader(f"📊 前 {top_colors} 主要 HSB 顏色資訊")
-        
-        # 視覺化輸出（不使用 StylerColumn，使用 st.markdown 和 CSS）
-
-        # 1. 建立視覺化顏色方塊列表
-        st.markdown("#### 顏色視覺化")
-        color_html = ""
-        for index, row in color_df.iterrows():
-            hex_color = row['顏色代碼 (RGB)']
-            h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
+        try:
+            # 讀取圖片
+            image = Image.open(uploaded_file)
             
-            # 創建 HTML 元素
-            color_html += f"""
-            <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px;">
-                <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
-                <p style="margin-top: 5px; font-size: 14px;">No. {row['排名']}</p>
-                <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
-                <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
-            </div>
-            """
+            # 左右分欄顯示
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.image(image, caption="原始圖片", use_column_width=True)
+                st.write(f"原始解析度: {image.size[0]}x{image.size[1]}")
 
-        # 2. 渲染 HTML
-        st.markdown(color_html, unsafe_allow_html=True)
+            # 執行分析
+            with st.spinner(f"正在分析 {uploaded_file.name}..."):
+                color_df, pixelated_image = analyze_color(image, block_size, top_colors)
+
+            with col2:
+                st.image(pixelated_image, caption=f"馬賽克化結果 (Block Size={block_size})", use_column_width=True)
+                st.write(f"分析解析度: {pixelated_image.size[0]}x{pixelated_image.size[1]}")
 
 
-        # 3. 顯示詳細數據表格 (使用 st.dataframe 或 st.table)
-        st.markdown("---")
-        st.markdown("#### 詳細數據表格")
+            # 顯示顏色結果
+            st.markdown("---")
+            st.subheader(f"📊 前 {top_colors} 主要 HSB 顏色資訊")
+            
+            # 視覺化輸出（使用 st.markdown 和 CSS）
+            st.markdown("#### 顏色視覺化")
+            color_html = ""
+            for index, row in color_df.iterrows():
+                hex_color = row['顏色代碼 (RGB)']
+                h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
+                
+                # 創建 HTML 元素
+                color_html += f"""
+                <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px;">
+                    <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
+                    <p style="margin-top: 5px; font-size: 14px;">No. {row['排名']}</p>
+                    <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
+                    <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
+                </div>
+                """
 
-        # 選擇並重命名欄位以更好地在界面顯示
-        display_cols = ['排名', '色相 (H)', '飽和度 (S)', '亮度 (B)', '像素數量', '比例 (%)', '顏色代碼 (RGB)']
+            # 渲染 HTML
+            st.markdown(color_html, unsafe_allow_html=True)
 
-        st.dataframe(
-            color_df[display_cols],
-            hide_index=True,
-            use_container_width=True
-        )
 
-        st.markdown("---")
-        st.info("備註：H (色相) 範圍 0-360；S (飽和度) 和 B (亮度) 範圍 0-100%。")
-        
-    except Exception as e:
-        st.error(f"分析過程中發生錯誤: {e}")
-        st.exception(e)
+            # 顯示詳細數據表格 
+            st.markdown("---")
+            st.markdown("#### 詳細數據表格")
+
+            # 選擇並重命名欄位以更好地在界面顯示
+            display_cols = ['排名', '色相 (H)', '飽和度 (S)', '亮度 (B)', '像素數量', '比例 (%)', '顏色代碼 (RGB)']
+
+            st.dataframe(
+                color_df[display_cols],
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            # 在每張圖片的結果間增加間隔
+            st.markdown("<br><br>", unsafe_allow_html=True) 
+
+        except Exception as e:
+            st.error(f"分析檔案 {uploaded_file.name} 時發生錯誤: {e}")
+            st.exception(e)
+
+    # 顯示總結資訊 (只需要顯示一次)
+    st.markdown("---")
+    st.info("分析完成。備註：H (色相) 範圍 0-360；S (飽和度) 和 B (亮度) 範圍 0-100%。")
 
 else:
     st.info("請在左側側邊欄上傳圖片以開始分析。")
