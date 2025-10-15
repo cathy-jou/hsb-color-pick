@@ -68,26 +68,37 @@ def pixelate_and_extract_hsv(img: Image.Image, block_size: int = 16):
     return hsv_data, Image.fromarray(downsampled_np), total_pixels
 
 
-# --- 核心分析函數：計算主色調（包含飽和度過濾） ---
-def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int = 10, min_saturation: int = 10):
+# --- 核心分析函數：計算主色調（包含飽和度與亮度過濾） ---
+def analyze_colors_from_hsv(
+    hsv_data: list, 
+    total_pixels: int, 
+    num_colors: int = 10, 
+    min_saturation: int = 10,
+    min_value: int = 0,       # 新增：最小亮度 (V) 閾值
+    max_value: int = 100      # 新增：最大亮度 (V) 閾值
+):
     """
-    從 HSB 像素列表中計算主要顏色，並忽略低飽和度（灰階）像素。
+    從 HSB 像素列表中計算主要顏色，並忽略低飽和度、極暗或極亮像素。
 
     Args:
         hsv_data (list): 包含 [(R,G,B), H, S, B] 資訊的像素列表。
         total_pixels (int): 圖片中的總像素數。
         num_colors (int): 要返回的顏色數量。
         min_saturation (int): 最小飽和度閾值 (0-100)。低於此值的像素將被忽略。
+        min_value (int): 最小亮度閾值 (0-100)。低於此值的像素（極暗）將被忽略。
+        max_value (int): 最大亮度閾值 (0-100)。高於此值的像素（極亮）將被忽略。
+
 
     Returns:
         pandas.DataFrame: 包含排名前 num_colors 的顏色資訊。
     """
     
-    # 1. 根據飽和度過濾無色調 (灰階) 像素
-    # 飽和度 S (索引 2) 必須大於等於 min_saturation
+    # 1. 根據飽和度和亮度過濾無色調/極端亮度像素
+    # 飽和度 S (索引 2) 必須 >= min_saturation
+    # 亮度 V (索引 3) 必須 >= min_value 且 <= max_value
     colorful_pixels = [
         (rgb, h, s, v) for rgb, h, s, v in hsv_data 
-        if s >= min_saturation
+        if s >= min_saturation and v >= min_value and v <= max_value
     ]
     
     if not colorful_pixels:
@@ -132,15 +143,15 @@ def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int =
 
 # --- Streamlit 應用介面 ---
 def app():
-    st.set_page_config(layout="wide", page_title="圖片色調分析")
-    st.title("圖片色調分析工具 (測試用)")
-    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。可調整 HSV **飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
+    st.set_page_config(layout="wide", page_title="圖片主色調分析")
+    st.title("🎨 圖片主色調分析工具 (飽和度與亮度過濾)")
+    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。您可以調整**飽和度 (S)** 和**亮度 (V)** 閾值來排除無色調、極黑或極白像素的影響。")
 
     # 關鍵修改：允許上傳多個檔案
     uploaded_files = st.file_uploader(
         "上傳一張或多張圖片 (JPG, PNG)", 
         type=["jpg", "png", "jpeg"],
-        accept_multiple_files=True # <--- 允許上傳多張
+        accept_multiple_files=True
     )
 
     # 檢查是否有檔案上傳
@@ -160,19 +171,42 @@ def app():
                 help="數值越大，細節越少，顏色數量越少，分析速度越快。"
             )
             
+            st.markdown("---")
+            st.subheader("顏色過濾條件 (HSB)")
+            
             # 2. 飽和度過濾閾值
             min_saturation = st.slider(
-                "最小飽和度閾值 (%)",
+                "最小飽和度 (S) 閾值 (%)",
                 min_value=0,
                 max_value=30,
                 value=10, 
                 step=1,
-                help="設定飽和度 S < 此值的像素將被視為灰階或近無色調，不納入主色計算。建議設在 5% - 15% 之間。"
+                help="S < 此值的像素將被視為灰階或近無色調，不納入主色計算。"
+            )
+
+            # 3. 亮度 (Value/Brightness) 過濾閾值 (新增)
+            min_value = st.slider(
+                "最小亮度 (V) 閾值 (%)",
+                min_value=0,
+                max_value=50,
+                value=5, # 預設排除極黑
+                step=1,
+                help="V < 此值的像素將被視為極暗（近黑），不納入主色計算。"
+            )
+
+            max_value = st.slider(
+                "最大亮度 (V) 閾值 (%)",
+                min_value=50,
+                max_value=100,
+                value=95, # 預設排除極白
+                step=1,
+                help="V > 此值的像素將被視為極亮（近白），不納入主色計算。"
             )
             
-            # 3. 顏色數量
+            # 4. 顏色數量
+            st.markdown("---")
             num_colors = st.slider(
-                "顯示的主色數量",
+                "要顯示的主色數量",
                 min_value=1,
                 max_value=20,
                 value=10,
@@ -189,7 +223,7 @@ def app():
         col_img, col_results = st.columns([1, 1.5])
         
         with col_img:
-            st.markdown(f"#### 圖片降採樣結果概覽 ")
+            st.markdown(f"#### 圖片降採樣結果概覽 (共 {len(uploaded_files)} 張)")
             
         
         image_count = 0
@@ -219,19 +253,26 @@ def app():
             st.warning("所有圖片處理失敗或上傳為空。")
             return
 
-        # 2. 計算主色調 (包含飽和度過濾，使用累積數據)
-        color_df = analyze_colors_from_hsv(all_hsv_data, grand_total_pixels, num_colors, min_saturation)
+        # 2. 計算主色調 (包含飽和度與亮度過濾，使用累積數據)
+        color_df = analyze_colors_from_hsv(
+            all_hsv_data, 
+            grand_total_pixels, 
+            num_colors, 
+            min_saturation,
+            min_value,       # 傳入最小亮度閾值
+            max_value        # 傳入最大亮度閾值
+        )
 
         # 顯示結果
         with col_results:
             if color_df.empty:
-                st.error(f"根據設定的飽和度閾值 ({min_saturation}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
+                st.error(f"根據您設定的過濾條件 (S<{min_saturation}%, V<{min_value}% 或 V>{max_value}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試調整閾值。")
             else:
-                st.markdown(f"#### 分析結果 ({image_count} 張圖片)")
+                st.markdown(f"#### 🏆 總體主色調分析結果 ({image_count} 張圖片)")
                 st.markdown(f"---")
                 
                 st.markdown(f"**分析基數**: 總計 **{grand_total_pixels}** 個馬賽克像素點。")
-                st.markdown(f"**過濾條件**: 飽和度 < {min_saturation}% 的像素已被排除。")
+                st.markdown(f"**過濾條件**: 已排除飽和度 < {min_saturation}% 及亮度 V < {min_value}% 或 V > {max_value}% 的像素。")
                 
                 # 3. 視覺化輸出
                 st.markdown("##### 顏色視覺化")
