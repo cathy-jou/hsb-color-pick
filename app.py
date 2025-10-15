@@ -5,18 +5,22 @@ import colorsys
 import pandas as pd
 from collections import Counter
 
-# --- 核心分析函數：現在只進行馬賽克化和像素提取 ---
+# --- 核心分析函數：馬賽克化和像素提取 ---
 def pixelate_and_extract_hsv(img: Image.Image, block_size: int = 16):
     """
-    將單張圖片馬賽克化並提取其所有像素的 HSB (0-255) 列表。
+    將單張圖片馬賽克化並提取其所有像素的 HSB 資訊。
+    
+    為了簡化主色分析，此函數會將圖片降採樣（馬賽克化），
+    並以 H:0-360, S:0-100, B:0-100 的尺度提取每個像素的 HSB 數據，
+    以及原始 RGB 數據。
 
     Args:
         img (Image.Image): PIL Image 物件。
         block_size (int): 用於馬賽克化處理的單元格大小。
 
     Returns:
-        tuple: (list, Image.Image) 
-               包含 HSB 像素列表和馬賽克化後的 PIL Image。
+        tuple: (list, Image.Image, int) 
+               包含 HSB 資訊的列表、馬賽克化後的 PIL Image、總像素數。
     """
     img = img.convert("RGB")
     width, height = img.size
@@ -35,163 +39,191 @@ def pixelate_and_extract_hsv(img: Image.Image, block_size: int = 16):
             x_start, x_end = x * block_size, (x + 1) * block_size
             
             block = img_np[y_start:y_end, x_start:x_end]
-            if block.size > 0:
-                avg_color = block.mean(axis=(0, 1)).astype(np.uint8)
-                downsampled_np[y, x] = avg_color
             
-    # 馬賽克後的圖片 (用於顯示)
-    pixelated_img = Image.fromarray(downsampled_np, 'RGB')
-    
-    # 3. 轉換為 HSB (HSV) 並提取像素列表
-    rgb_pixels = downsampled_np.reshape(-1, 3) / 255.0
-    hsv_pixels_int = [] # 儲存 HSB 0-255 範圍
-    
-    for r, g, b in rgb_pixels:
-        h, s, v = colorsys.rgb_to_hsv(r, g, b)
-        # 將 H, S, V 轉換為 0-255 範圍以便於統計
-        h_int = int(h * 255) 
-        s_int = int(s * 255) 
-        v_int = int(v * 255) 
-        hsv_pixels_int.append((h_int, s_int, v_int))
-        
-    return hsv_pixels_int, pixelated_img
-
-# --- Streamlit 界面設計 ---
-st.set_page_config(
-    page_title="圖片顏色分析平台",
-    layout="wide"
-)
-
-st.title("圖片顏色(HSB)分析")
-st.markdown("上傳多張圖片，程式會先進行馬賽克化，然後**統一統計所有圖片像素**的最主要 HSB 顏色資訊。")
-
-# 側邊欄控制項
-st.sidebar.header("設定參數")
-
-# 1. 允許上傳多個檔案
-uploaded_files = st.sidebar.file_uploader(
-    "上傳圖片 (.jpg, .png) - 可選取多張", 
-    type=["jpg", "jpeg", "png"],
-    accept_multiple_files=True  # 關鍵設定
-)
-
-# 2. 核心參數
-block_size = st.sidebar.slider(
-    "馬賽克區塊大小 (Block Size)",
-    min_value=4,
-    max_value=64,
-    value=16,
-    step=4,
-    help="值越大，降低解析度越劇烈，顏色統計越少樣化。"
-)
-
-top_colors = st.sidebar.slider(
-    "輸出主要顏色數量",
-    min_value=1,
-    max_value=20,
-    value=5,
-    step=1
-)
-
-# --- 統一分析邏輯 ---
-if uploaded_files: 
-    
-    # 準備合併所有圖片的像素數據
-    all_hsv_pixels = []
-    pixelated_images = []
-    
-    st.subheader("圖片處理與視覺化")
-    st.markdown(f"**將對 {len(uploaded_files)} 張圖片進行統一分析 (Block Size={block_size})。**")
-    
-    # 1. 處理每張圖片並收集像素
-    with st.spinner(f"正在處理 {len(uploaded_files)} 張圖片並收集像素..."):
-        
-        # 顯示所有圖片的馬賽克化結果
-        cols = st.columns(len(uploaded_files) if len(uploaded_files) <= 4 else 4)
-
-        for file_index, uploaded_file in enumerate(uploaded_files):
-            try:
-                image = Image.open(uploaded_file)
+            if block.size == 0:
+                continue
                 
-                # 執行馬賽克化並提取像素
-                hsv_pixels, pixelated_img = pixelate_and_extract_hsv(image, block_size)
-                
-                all_hsv_pixels.extend(hsv_pixels)
-                pixelated_images.append(pixelated_img)
-
-                # 顯示單張圖片的馬賽克結果
-                col_index = file_index % len(cols)
-                with cols[col_index]:
-                    st.image(pixelated_img, caption=f"檔案 #{file_index + 1}", use_container_width=True)
-
-            except Exception as e:
-                st.warning(f"跳過檔案 {uploaded_file.name} (錯誤: {e})")
-
-    if not all_hsv_pixels:
-        st.error("所有圖片處理失敗或未成功提取任何像素數據。")
-    else:
-        # 2. 統一統計所有收集到的像素
-        st.markdown("---")
-        st.subheader(f"總體顏色分析結果 ({len(uploaded_files)} 張圖片統一統計)")
+            avg_color = block.mean(axis=(0, 1)).astype(np.uint8)
+            downsampled_np[y, x] = avg_color
+            
+    # 3. 提取 HSB 像素列表 
+    hsv_data = []
+    total_pixels = downsampled_np.shape[0] * downsampled_np.shape[1]
+    
+    for rgb_tuple in downsampled_np.reshape(-1, 3):
+        r, g, b = rgb_tuple
         
-        color_counts = Counter(all_hsv_pixels)
-        total_pixels = len(all_hsv_pixels)
+        # colorsys 預期 (0-1) 尺度
+        h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0) 
+        
+        # 轉換為常用的 H:0-360, S:0-100, B(Value):0-100 尺度
+        h_deg = int(h * 360)
+        s_perc = int(s * 100)
+        v_perc = int(v * 100)
+        
+        # 儲存 HSB 資訊，以及原始 RGB (0-255) 資訊
+        # 格式: ( (R, G, B), H, S, B )
+        hsv_data.append(((r, g, b), h_deg, s_perc, v_perc))
+        
+    return hsv_data, Image.fromarray(downsampled_np), total_pixels
 
-        results = []
-        for (h_int, s_int, b_int), count in color_counts.most_common(top_colors):
-            # 轉換為標準 HSB 範圍 (H:0-360, S:0-100%, B:0-100%)
-            h_degree = round(h_int / 255.0 * 360)
-            s_percent = round(s_int / 255.0 * 100)
-            b_percent = round(b_int / 255.0 * 100)
+
+# --- 核心分析函數：計算主色調（包含飽和度過濾） ---
+def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int = 10, min_saturation: int = 10):
+    """
+    從 HSB 像素列表中計算主要顏色，並忽略低飽和度（灰階）像素。
+
+    Args:
+        hsv_data (list): 包含 [(R,G,B), H, S, B] 資訊的像素列表。
+        total_pixels (int): 圖片中的總像素數。
+        num_colors (int): 要返回的顏色數量。
+        min_saturation (int): 最小飽和度閾值 (0-100)。低於此值的像素將被忽略。
+
+    Returns:
+        pandas.DataFrame: 包含排名前 num_colors 的顏色資訊。
+    """
+    
+    # 1. 根據飽和度過濾無色調 (灰階) 像素
+    # 飽和度 S (索引 2) 必須大於等於 min_saturation
+    colorful_pixels = [
+        (rgb, h, s, v) for rgb, h, s, v in hsv_data 
+        if s >= min_saturation
+    ]
+    
+    if not colorful_pixels:
+        return pd.DataFrame()
+    
+    # 2. 統計最常見的顏色
+    # 我們根據馬賽克化後的 RGB 值進行計數
+    rgb_tuples = [item[0] for item in colorful_pixels]
+    
+    # 使用 Counter 統計每個 RGB 顏色出現的頻率
+    color_counts = Counter(rgb_tuples)
+    
+    # 3. 選擇前 N 個最常見的顏色
+    most_common_colors = color_counts.most_common(num_colors)
+    
+    results = []
+    current_rank = 1
+    
+    # 處理計數結果
+    for rgb_tuple, count in most_common_colors:
+        r, g, b = rgb_tuple
+        
+        # 重新計算 HSB (使用 colorsys 0-1 尺度)
+        h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
+        
+        # 格式化輸出
+        hex_color = f"#{r:02x}{g:02x}{b:02x}"
+        
+        results.append({
+            "排名": current_rank,
+            "色相 (H)": int(h * 360), # 0-360°
+            "飽和度 (S)": int(s * 100), # 0-100%
+            "亮度 (B)": int(v * 100), # 0-100% (Value / Brightness)
+            # 比例基於該主色在**原始總像素**中的佔比
+            "比例 (%)": round(count / total_pixels * 100, 2),
+            "顏色代碼 (RGB)": hex_color
+        })
+        current_rank += 1
             
-            # 轉換為 HTML/CSS 顏色代碼 (用於視覺化)
-            r, g, b = colorsys.hsv_to_rgb(h_int/255.0, s_int/255.0, b_int/255.0)
-            hex_color = f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
+    return pd.DataFrame(results)
+
+
+# --- Streamlit 應用介面 ---
+def app():
+    st.set_page_config(layout="wide", page_title="圖片主色調分析")
+    st.title("🎨 圖片主色調分析工具 (飽和度過濾)")
+    st.markdown("本工具對圖片進行**馬賽克化**後，會計算出主要的顏色。您可以調整**飽和度閾值**來**忽略無色調（灰階、黑、白）像素**的影響。")
+
+    uploaded_file = st.file_uploader("上傳一張圖片 (JPG, PNG)", type=["jpg", "png", "jpeg"])
+
+    if uploaded_file is not None:
+        try:
+            img = Image.open(uploaded_file)
             
-            results.append({
-                "排名": len(results) + 1,
-                "色相 (H)": h_degree,
-                "飽和度 (S)": s_percent,
-                "亮度 (B)": b_percent,
-                "像素數量": count,
-                "比例 (%)": round(count / total_pixels * 100, 2),
-                "顏色代碼 (RGB)": hex_color
-            })
-            
-        color_df = pd.DataFrame(results)
+            # --- 側邊欄：參數設定 ---
+            with st.sidebar:
+                st.header("分析參數設定")
+                
+                # 1. 馬賽克塊大小
+                block_size = st.slider(
+                    "馬賽克區塊大小 (降採樣級別)",
+                    min_value=4,
+                    max_value=64,
+                    value=16,
+                    step=4,
+                    help="數值越大，細節越少，顏色數量越少，分析速度越快。"
+                )
+                
+                # 2. 飽和度過濾閾值 (核心新功能)
+                min_saturation = st.slider(
+                    "最小飽和度閾值 (%)",
+                    min_value=0,
+                    max_value=30,
+                    value=10, # 預設值 10% S
+                    step=1,
+                    help="設定飽和度 S < 此值的像素將被視為灰階或近無色調，不納入主色計算。建議設在 5% - 15% 之間。"
+                )
+                
+                # 3. 顏色數量
+                num_colors = st.slider(
+                    "要顯示的主色數量",
+                    min_value=1,
+                    max_value=20,
+                    value=10,
+                    step=1
+                )
+                
+            # --- 執行分析 ---
+            # 1. 馬賽克化和像素提取
+            hsv_data, pixelated_img, total_pixels = pixelate_and_extract_hsv(img, block_size)
 
-        # 3. 視覺化輸出
-        st.markdown("#### 顏色視覺化")
-        color_html = ""
-        for index, row in color_df.iterrows():
-            hex_color = row['顏色代碼 (RGB)']
-            h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
-            
-            color_html += f"""
-            <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px;">
-                <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
-                <p style="margin-top: 5px; font-size: 14px;">No. {row['排名']}</p>
-                <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
-                <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
-            </div>
-            """
+            # 2. 計算主色調 (包含飽和度過濾)
+            color_df = analyze_colors_from_hsv(hsv_data, total_pixels, num_colors, min_saturation)
 
-        st.markdown(color_html, unsafe_allow_html=True)
+            # 佈局：圖片在左，結果在右
+            col_img, col_results = st.columns([1, 1.5])
 
-        # 4. 顯示詳細數據表格
-        st.markdown("---")
-        st.markdown("#### 詳細數據表格")
+            with col_img:
+                st.markdown("#### 原始圖片與降採樣結果")
+                st.image(img, caption="原始圖片", use_column_width=True)
+                st.image(pixelated_img, caption=f"降採樣結果 ({block_size}x{block_size} 區塊)", use_column_width=True)
+                
+            with col_results:
+                if color_df.empty:
+                    st.error(f"根據您設定的飽和度閾值 ({min_saturation}%)，圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
+                else:
+                    st.markdown(f"#### 分析結果 (排除飽和度 < {min_saturation}% 的像素)")
+                    
+                    # 3. 視覺化輸出
+                    st.markdown("##### 顏色視覺化")
+                    color_html = ""
+                    for index, row in color_df.iterrows():
+                        hex_color = row['顏色代碼 (RGB)']
+                        h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
+                        
+                        # 使用 HTML 建立顏色塊，提供更好的視覺效果
+                        color_html += f"""
+                        <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px; border-radius: 8px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+                            <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
+                            <p style="margin-top: 5px; font-size: 14px; font-weight: bold;">No. {row['排名']}</p>
+                            <p style="font-size: 12px; margin: 0;">HEX: {hex_color.upper()}</p>
+                            <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
+                            <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
+                        </div>
+                        """
 
-        display_cols = ['排名', '色相 (H)', '飽和度 (S)', '亮度 (B)', '像素數量', '比例 (%)', '顏色代碼 (RGB)']
+                    st.markdown(color_html, unsafe_allow_html=True)
 
-        st.dataframe(
-            color_df[display_cols],
-            hide_index=True,
-            use_container_width=True
-        )
+                    # 4. 顯示詳細數據表格
+                    st.markdown("---")
+                    st.markdown("##### 詳細數據表格")
+                    st.dataframe(color_df, use_container_width=True)
 
-        st.markdown("---")
-        st.info("分析完成。備註：H (色相) 範圍 0-360；S (飽和度) 和 B (亮度) 範圍 0-100%。")
 
-else:
-    st.info("請在左側側邊欄上傳圖片以開始分析。")
+        except Exception as e:
+            st.error(f"處理圖片時發生錯誤。請檢查圖片格式或聯繫開發者。錯誤訊息: {e}")
+
+if __name__ == "__main__":
+    app()
