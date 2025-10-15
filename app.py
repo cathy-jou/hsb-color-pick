@@ -149,7 +149,7 @@ def app():
 
     # 關鍵修改：允許上傳多個檔案
     uploaded_files = st.file_uploader(
-        "上傳一張或多張圖片 (JPG, PNG)，請放心此頁面不用儲存您上傳的照片!", 
+        "上傳一張或多張圖片 (JPG, PNG)，請放心此頁面不會儲存您上傳的照片!", 
         type=["jpg", "png", "jpeg"],
         accept_multiple_files=True
     )
