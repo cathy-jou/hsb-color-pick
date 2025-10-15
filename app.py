@@ -227,7 +227,7 @@ def app():
             if color_df.empty:
                 st.error(f"根據您設定的飽和度閾值 ({min_saturation}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
             else:
-                st.markdown(f"#### 色調分析結果 ({image_count} 張圖片)")
+                st.markdown(f"#### 分析結果 ({image_count} 張圖片)")
                 st.markdown(f"---")
                 
                 st.markdown(f"**分析基數**: 總計 **{grand_total_pixels}** 個馬賽克像素點。")
