@@ -172,7 +172,7 @@ def app():
             
             # 3. 顏色數量
             num_colors = st.slider(
-                "要顯示的主色數量",
+                "顯示的主色數量",
                 min_value=1,
                 max_value=20,
                 value=10,
