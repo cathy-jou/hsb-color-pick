@@ -134,7 +134,7 @@ def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int =
 def app():
     st.set_page_config(layout="wide", page_title="圖片色調分析")
     st.title("圖片色調分析工具 (測試用)")
-    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。您可以調整HSV**飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
+    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。可調整 HSV **飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
 
     # 關鍵修改：允許上傳多個檔案
     uploaded_files = st.file_uploader(
@@ -225,7 +225,7 @@ def app():
         # 顯示結果
         with col_results:
             if color_df.empty:
-                st.error(f"根據您設定的飽和度閾值 ({min_saturation}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
+                st.error(f"根據設定的飽和度閾值 ({min_saturation}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
             else:
                 st.markdown(f"#### 分析結果 ({image_count} 張圖片)")
                 st.markdown(f"---")
