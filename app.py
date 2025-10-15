@@ -145,7 +145,7 @@ def analyze_colors_from_hsv(
 def app():
     st.set_page_config(layout="wide", page_title="圖片色調分析(測試用)")
     st.title("圖片色調分析工具 (測試用)")
-    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。可以調整 HSV **飽和度 (S)** 和**亮度 (V)** 閾值來排除無色調、極黑或極白像素的影響。")
+    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。可以調整 HSV **飽和度 (S)** 和**明度 (V)** 閾值來排除無色調、極黑或極白像素的影響。")
 
     # 關鍵修改：允許上傳多個檔案
     uploaded_files = st.file_uploader(
