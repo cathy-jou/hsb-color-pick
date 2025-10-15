@@ -133,8 +133,8 @@ def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int =
 # --- Streamlit 應用介面 ---
 def app():
     st.set_page_config(layout="wide", page_title="圖片主色調分析")
-    st.title("圖片主色調分析工具 (飽和度過濾)")
-    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。您可以調整**飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
+    st.title("圖片主色調分析工具 (測試用)")
+    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。您可以調整HSV**飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
 
     # 關鍵修改：允許上傳多個檔案
     uploaded_files = st.file_uploader(
