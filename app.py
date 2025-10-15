@@ -134,96 +134,132 @@ def analyze_colors_from_hsv(hsv_data: list, total_pixels: int, num_colors: int =
 def app():
     st.set_page_config(layout="wide", page_title="圖片主色調分析")
     st.title("🎨 圖片主色調分析工具 (飽和度過濾)")
-    st.markdown("本工具對圖片進行**馬賽克化**後，會計算出主要的顏色。您可以調整**飽和度閾值**來**忽略無色調（灰階、黑、白）像素**的影響。")
+    st.markdown("本工具對**多張圖片**進行馬賽克化後，會**統一計算**出整體主要顏色。您可以調整**飽和度閾值**來忽略無色調（灰階、黑、白）像素的影響。")
 
-    uploaded_file = st.file_uploader("上傳一張圖片 (JPG, PNG)", type=["jpg", "png", "jpeg"])
+    # 關鍵修改：允許上傳多個檔案
+    uploaded_files = st.file_uploader(
+        "上傳一張或多張圖片 (JPG, PNG)", 
+        type=["jpg", "png", "jpeg"],
+        accept_multiple_files=True # <--- 允許上傳多張
+    )
 
-    if uploaded_file is not None:
-        try:
-            img = Image.open(uploaded_file)
+    # 檢查是否有檔案上傳
+    if uploaded_files:
+        
+        # --- 側邊欄：參數設定 ---
+        with st.sidebar:
+            st.header("分析參數設定")
             
-            # --- 側邊欄：參數設定 ---
-            with st.sidebar:
-                st.header("分析參數設定")
+            # 1. 馬賽克塊大小
+            block_size = st.slider(
+                "馬賽克區塊大小 (降採樣級別)",
+                min_value=4,
+                max_value=64,
+                value=16,
+                step=4,
+                help="數值越大，細節越少，顏色數量越少，分析速度越快。"
+            )
+            
+            # 2. 飽和度過濾閾值
+            min_saturation = st.slider(
+                "最小飽和度閾值 (%)",
+                min_value=0,
+                max_value=30,
+                value=10, 
+                step=1,
+                help="設定飽和度 S < 此值的像素將被視為灰階或近無色調，不納入主色計算。建議設在 5% - 15% 之間。"
+            )
+            
+            # 3. 顏色數量
+            num_colors = st.slider(
+                "要顯示的主色數量",
+                min_value=1,
+                max_value=20,
+                value=10,
+                step=1
+            )
+            
+        # --- 執行分析 ---
+        
+        # 用於累積所有圖片的像素數據
+        all_hsv_data = []
+        grand_total_pixels = 0
+        
+        # 設定輸出佈局
+        col_img, col_results = st.columns([1, 1.5])
+        
+        with col_img:
+            st.markdown(f"#### 圖片降採樣結果概覽 (共 {len(uploaded_files)} 張)")
+            
+        
+        image_count = 0
+        for uploaded_file in uploaded_files:
+            try:
+                img = Image.open(uploaded_file)
                 
-                # 1. 馬賽克塊大小
-                block_size = st.slider(
-                    "馬賽克區塊大小 (降採樣級別)",
-                    min_value=4,
-                    max_value=64,
-                    value=16,
-                    step=4,
-                    help="數值越大，細節越少，顏色數量越少，分析速度越快。"
-                )
+                # 1. 馬賽克化和像素提取 (針對單張圖片)
+                hsv_data, pixelated_img, total_pixels = pixelate_and_extract_hsv(img, block_size)
                 
-                # 2. 飽和度過濾閾值 (核心新功能)
-                min_saturation = st.slider(
-                    "最小飽和度閾值 (%)",
-                    min_value=0,
-                    max_value=30,
-                    value=10, # 預設值 10% S
-                    step=1,
-                    help="設定飽和度 S < 此值的像素將被視為灰階或近無色調，不納入主色計算。建議設在 5% - 15% 之間。"
-                )
+                # 累積數據
+                all_hsv_data.extend(hsv_data)
+                grand_total_pixels += total_pixels
+                image_count += 1
                 
-                # 3. 顏色數量
-                num_colors = st.slider(
-                    "要顯示的主色數量",
-                    min_value=1,
-                    max_value=20,
-                    value=10,
-                    step=1
-                )
+                # 在左側欄顯示每張圖片的降採樣結果
+                with col_img:
+                    st.image(pixelated_img, 
+                             caption=f"圖 {image_count}: {uploaded_file.name}", 
+                             width=300) # 限制寬度以堆疊顯示
                 
-            # --- 執行分析 ---
-            # 1. 馬賽克化和像素提取
-            hsv_data, pixelated_img, total_pixels = pixelate_and_extract_hsv(img, block_size)
+            except Exception as e:
+                st.error(f"處理圖片 {uploaded_file.name} 時發生錯誤: {e}")
+        
+        # 檢查是否成功處理了任何圖片
+        if not all_hsv_data:
+            st.warning("所有圖片處理失敗或上傳為空。")
+            return
 
-            # 2. 計算主色調 (包含飽和度過濾)
-            color_df = analyze_colors_from_hsv(hsv_data, total_pixels, num_colors, min_saturation)
+        # 2. 計算主色調 (包含飽和度過濾，使用累積數據)
+        color_df = analyze_colors_from_hsv(all_hsv_data, grand_total_pixels, num_colors, min_saturation)
 
-            # 佈局：圖片在左，結果在右
-            col_img, col_results = st.columns([1, 1.5])
-
-            with col_img:
-                st.markdown("#### 原始圖片與降採樣結果")
-                st.image(img, caption="原始圖片", use_column_width=True)
-                st.image(pixelated_img, caption=f"降採樣結果 ({block_size}x{block_size} 區塊)", use_column_width=True)
+        # 顯示結果
+        with col_results:
+            if color_df.empty:
+                st.error(f"根據您設定的飽和度閾值 ({min_saturation}%)，所有圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
+            else:
+                st.markdown(f"#### 🏆 總體主色調分析結果 ({image_count} 張圖片)")
+                st.markdown(f"---")
                 
-            with col_results:
-                if color_df.empty:
-                    st.error(f"根據您設定的飽和度閾值 ({min_saturation}%)，圖片中沒有足夠的「有色調」像素進行分析。請嘗試降低閾值。")
-                else:
-                    st.markdown(f"#### 分析結果 (排除飽和度 < {min_saturation}% 的像素)")
+                st.markdown(f"**分析基數**: 總計 **{grand_total_pixels}** 個馬賽克像素點。")
+                st.markdown(f"**過濾條件**: 飽和度 < {min_saturation}% 的像素已被排除。")
+                
+                # 3. 視覺化輸出
+                st.markdown("##### 顏色視覺化")
+                color_html = ""
+                for index, row in color_df.iterrows():
+                    hex_color = row['顏色代碼 (RGB)']
+                    h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
                     
-                    # 3. 視覺化輸出
-                    st.markdown("##### 顏色視覺化")
-                    color_html = ""
-                    for index, row in color_df.iterrows():
-                        hex_color = row['顏色代碼 (RGB)']
-                        h, s, b = row['色相 (H)'], row['飽和度 (S)'], row['亮度 (B)']
-                        
-                        # 使用 HTML 建立顏色塊，提供更好的視覺效果
-                        color_html += f"""
-                        <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px; border-radius: 8px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
-                            <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
-                            <p style="margin-top: 5px; font-size: 14px; font-weight: bold;">No. {row['排名']}</p>
-                            <p style="font-size: 12px; margin: 0;">HEX: {hex_color.upper()}</p>
-                            <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
-                            <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
-                        </div>
-                        """
+                    # 使用 HTML 建立顏色塊，提供更好的視覺效果
+                    color_html += f"""
+                    <div style="display: inline-block; margin: 10px; text-align: center; border: 1px solid #ccc; padding: 5px; min-width: 120px; border-radius: 8px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+                        <div style="width: 100px; height: 100px; background-color: {hex_color}; margin: auto; border-radius: 5px;"></div>
+                        <p style="margin-top: 5px; font-size: 14px; font-weight: bold;">No. {row['排名']}</p>
+                        <p style="font-size: 12px; margin: 0;">HEX: {hex_color.upper()}</p>
+                        <p style="font-size: 12px; margin: 0;">HSB: ({h}°, {s}%, {b}%)</p>
+                        <p style="font-size: 12px; margin: 0;">比例: {row['比例 (%)']}%</p>
+                    </div>
+                    """
 
-                    st.markdown(color_html, unsafe_allow_html=True)
+                st.markdown(color_html, unsafe_allow_html=True)
 
-                    # 4. 顯示詳細數據表格
-                    st.markdown("---")
-                    st.markdown("##### 詳細數據表格")
-                    st.dataframe(color_df, use_container_width=True)
+                # 4. 顯示詳細數據表格
+                st.markdown("---")
+                st.markdown("##### 詳細數據表格")
+                st.dataframe(color_df, use_container_width=True)
 
-
-        except Exception as e:
-            st.error(f"處理圖片時發生錯誤。請檢查圖片格式或聯繫開發者。錯誤訊息: {e}")
+    elif uploaded_files is None or len(uploaded_files) == 0:
+        st.info("請上傳一張或多張圖片以開始分析。")
 
 if __name__ == "__main__":
     app()
